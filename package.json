@@ -3,11 +3,10 @@
   "version": "1.0.0",
   "description": "Time tracking application",
   "scripts": {
-    "deploy": "cd pepe-cls && npm run build && cd .. && npx wrangler deploy",
+    "deploy": "cd pepe-cls && npm run build && cd .. && npx wrangler pages deploy pepe-cls/dist",
     "build": "cd pepe-cls && npm run build"
   },
   "devDependencies": {
-    "gh-pages": "^6.0.0",
     "wrangler": "^3.0.0"
   }
 }

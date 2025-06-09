@@ -1,0 +1,5 @@
+name = "pepe-clocke"
+compatibility_date = "2025-06-09"
+
+[site]
+bucket = "./pepe-cls/dist"
