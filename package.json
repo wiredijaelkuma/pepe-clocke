@@ -3,8 +3,11 @@
   "version": "1.0.0",
   "description": "Time tracking application",
   "scripts": {
-    "deploy": "cd pepe-cls && npm run build && cd .. && npx wrangler pages deploy pepe-cls/dist",
+    "deploy": "cd pepe-cls && npm run build && cd .. && npx wrangler pages publish pepe-cls/dist --project-name=pepe-clocke",
     "build": "cd pepe-cls && npm run build"
+  },
+  "dependencies": {
+    "@cloudflare/kv-asset-handler": "^0.3.0"
   },
   "devDependencies": {
     "wrangler": "^3.0.0"

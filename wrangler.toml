@@ -1,5 +1,7 @@
+# Wrangler configuration for Cloudflare Pages
 name = "pepe-clocke"
 compatibility_date = "2025-06-09"
+main = "./worker-site/index.js"
 
 [site]
 bucket = "./pepe-cls/dist"
