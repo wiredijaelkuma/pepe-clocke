@@ -34,7 +34,7 @@
         <!-- Main activity options as 2x2 grid -->
         <template v-if="step === 'main'">
           <button v-if="!lunchUsed" class="agent-btn agent-btn-orange" @click="startLunch().then(afterActivity)">
-            <img src="/static/home.svg" class="btn-icon" /> Lunch (45 min)
+            <img src="/static/home.svg" class="btn-icon" /> Lunch (30 min)
           </button>
           <button v-if="shortBreaksUsed < 2" class="agent-btn agent-btn-gold" @click="startShortBreak().then(afterActivity)">
             <img src="/static/arrow-door.svg" class="btn-icon" /> Short Break (15 min)

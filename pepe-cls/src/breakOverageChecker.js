@@ -4,7 +4,7 @@ import { fetchTodayActivities } from './appwriteAgentSession'
 const BREAK_LIMITS = {
   'Short Break': 15,
   'Bathroom Break': 15,
-  'Lunch': 45
+  'Lunch': 30
 }
 
 // Returns array of overage violations for a user for today
