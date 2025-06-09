@@ -1,15 +1,18 @@
 import { Client, Account, Databases, Query, ID } from 'appwrite'
 
 const getEndpoint = () => {
-  return import.meta.env.VITE_APPWRITE_ENDPOINT
+  // Fallback for production if env vars aren't loaded properly
+  return import.meta.env.VITE_APPWRITE_ENDPOINT || 'https://fra.cloud.appwrite.io/v1'
 }
 
 const getProjectId = () => {
-  return import.meta.env.VITE_APPWRITE_PROJECT_ID
+  // Fallback for production if env vars aren't loaded properly
+  return import.meta.env.VITE_APPWRITE_PROJECT_ID || '6846140e000a316ba80b'
 }
 
 const getProjectName = () => {
-  return import.meta.env.VITE_APPWRITE_PROJECT_NAME
+  // Fallback for production if env vars aren't loaded properly
+  return import.meta.env.VITE_APPWRITE_PROJECT_NAME || 'pepe-clocke'
 }
 
 const client = new Client().setEndpoint(getEndpoint()).setProject(getProjectId())

@@ -14,4 +14,20 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  build: {
+    // Generate sourcemaps for better debugging
+    sourcemap: true,
+    // Optimize chunks
+    chunkSizeWarningLimit: 1600,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor': ['vue', 'vue-router'],
+          'appwrite': ['appwrite']
+        }
+      }
+    }
+  },
+  // Ensure static assets are handled correctly
+  publicDir: 'public'
 })
