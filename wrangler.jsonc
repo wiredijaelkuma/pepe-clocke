@@ -1,0 +1,10 @@
+{
+  "name": "pepe-clocke",
+  "compatibility_date": "2025-06-09",
+  "assets": {
+    "directory": "./pepe-cls/dist"
+  },
+  "routes": [
+    { "pattern": "*", "script": null }
+  ]
+}

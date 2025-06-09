@@ -19,13 +19,10 @@ import { account } from './lib/appwrite';
 
 async function loginWithGoogle() {
   try {
-    // GitHub Pages URL
-    const baseUrl = 'https://wiredijaelkuma.github.io/pepe-clocke';
-    
-    // Use dynamic URL for development, GitHub Pages URL for production
-    const isDev = process.env.NODE_ENV === 'development';
-    const redirectSuccess = isDev ? `${window.location.origin}/agent` : `${baseUrl}/agent`;
-    const redirectFailure = isDev ? `${window.location.origin}/` : `${baseUrl}/`;
+    // Get the current origin for both dev and production
+    const origin = window.location.origin;
+    const redirectSuccess = `${origin}/agent`;
+    const redirectFailure = `${origin}/`;
     
     await account.createOAuth2Session(
       'google',
