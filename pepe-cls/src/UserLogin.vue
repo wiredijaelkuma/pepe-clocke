@@ -19,14 +19,13 @@ import { account } from './lib/appwrite';
 
 async function loginWithGoogle() {
   try {
-    // Use hardcoded URL for production to avoid issues with Vercel
-    const successUrl = 'https://pepe-clocke.vercel.app/agent';
-    const failureUrl = 'https://pepe-clocke.vercel.app/';
+    // GitHub Pages URL
+    const baseUrl = 'https://yourusername.github.io/pepe-clocke';
     
-    // Use dynamic URL for development
+    // Use dynamic URL for development, GitHub Pages URL for production
     const isDev = process.env.NODE_ENV === 'development';
-    const redirectSuccess = isDev ? `${window.location.origin}/agent` : successUrl;
-    const redirectFailure = isDev ? `${window.location.origin}/` : failureUrl;
+    const redirectSuccess = isDev ? `${window.location.origin}/agent` : `${baseUrl}/agent`;
+    const redirectFailure = isDev ? `${window.location.origin}/` : `${baseUrl}/`;
     
     await account.createOAuth2Session(
       'google',
