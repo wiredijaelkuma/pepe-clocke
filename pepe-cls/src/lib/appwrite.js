@@ -15,7 +15,10 @@ const getProjectName = () => {
   return 'pepe-clocke'
 }
 
-const client = new Client().setEndpoint(getEndpoint()).setProject(getProjectId())
+// Simple client configuration
+const client = new Client()
+  .setEndpoint(getEndpoint())
+  .setProject(getProjectId())
 
 const account = new Account(client)
 const databases = new Databases(client)

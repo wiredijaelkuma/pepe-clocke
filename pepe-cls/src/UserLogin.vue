@@ -10,32 +10,46 @@
       <button class="login-google-btn" @click="loginWithGoogle">
         Login with Google
       </button>
+      <div v-if="error" class="error-message">
+        {{ error }}
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
+import { ref } from 'vue';
 import { account } from './lib/appwrite';
+import { useRouter } from 'vue-router';
+
+const router = useRouter();
+const error = ref('');
 
 async function loginWithGoogle() {
   try {
-    // Get the current origin for both dev and production
-    const origin = window.location.origin;
-    const redirectSuccess = `${origin}/agent`;
-    const redirectFailure = `${origin}/`;
+    error.value = '';
     
+    // Try to get current session first
+    try {
+      const session = await account.get();
+      console.log('Existing session found:', session);
+      router.push('/agent');
+      return;
+    } catch (sessionError) {
+      console.log('No existing session, proceeding with login');
+    }
+    
+    // Create OAuth session
     await account.createOAuth2Session(
       'google',
-      redirectSuccess,
-      redirectFailure
+      window.location.origin + '/#/agent',
+      window.location.origin + '/#/'
     );
-  } catch (error) {
-    console.error('Login failed:', error);
-    alert('Login failed. Please try again.');
+  } catch (err) {
+    console.error('Login failed:', err);
+    error.value = 'Login failed. Please try again.';
   }
 }
-
-// Admin portal access moved to agent dashboard
 </script>
 
 <style scoped>
@@ -102,19 +116,13 @@ async function loginWithGoogle() {
   transform: translateY(-2px);
 }
 
-.key-button {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 20px;
-}
-
-.key-button img {
-  width: 30px;
-  cursor: pointer;
-  transition: transform 0.2s ease;
-}
-
-.key-button img:hover {
-  transform: scale(1.2);
+.error-message {
+  color: #fff;
+  background-color: rgba(255, 0, 0, 0.3);
+  padding: 10px;
+  border-radius: 5px;
+  margin-top: 20px;
+  text-align: center;
+  width: 100%;
 }
 </style>

@@ -1,7 +1,10 @@
 {
   "version": 1,
-  "include": [
-    "/*"
-  ],
-  "exclude": []
+  "routes": [
+    {
+      "src": "/*",
+      "dest": "/index.html",
+      "status": 200
+    }
+  ]
 }

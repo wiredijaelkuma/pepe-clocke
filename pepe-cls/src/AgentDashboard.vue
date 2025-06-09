@@ -90,7 +90,6 @@ import { useAgentProfiles } from './useAgentProfiles'
 import { databases, Query, account } from './lib/appwrite'
 import { authorizedUserEmails } from './authorizedUsers'
 import { useRouter } from 'vue-router'
-// Removed Chart.js import
 
 const router = useRouter()
 const logExpanded = ref(false)
@@ -157,13 +156,13 @@ async function fetchActiveAgents() {
       });
     
     activeAgents.value = activeUsers.size;
-  } catch {
+  } catch (error) {
+    console.log('Error fetching active agents (non-critical):', error.message);
     activeAgents.value = 0
   }
 }
 
 const time = ref('--:--:--')
-// Removed admin-only data
 
 const {
   status,
@@ -181,19 +180,6 @@ const {
   backFromBathroomBreak,
   clockOut
 } = useAgentButtons(activeAgents)
-
-// Removed admin-only functions
-
-onMounted(() => {
-  fetchActiveAgents()
-  setInterval(fetchActiveAgents, 10000)
-  setInterval(() => {
-    const now = new Date()
-    time.value = now.toLocaleTimeString()
-  }, 1000)
-  
-  // Remove this duplicate onMounted call
-})
 
 // Watch for session state changes and update UI accordingly
 watch(
@@ -231,10 +217,11 @@ async function updateActivityLog() {
       log.value = updatedLog;
     }
   } catch (error) {
-    console.error('Failed to update activity log:', error);
+    console.log('Failed to update activity log (non-critical):', error.message);
   }
 }
 
+// Single onMounted to avoid duplicates
 onMounted(() => {
   fetchActiveAgents()
   updateActivityLog()

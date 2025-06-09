@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHashHistory } from 'vue-router'
 import UserLogin from './UserLogin.vue';
 import AgentLayout from './AgentLayout.vue';
 import AdminInterface from './AdminInterface.vue';
@@ -34,26 +34,38 @@ const routes = [
 ];
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHashHistory(),
   routes,
 });
 
 router.beforeEach(async (to, from, next) => {
+  console.log('Navigating to:', to.path);
+  
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
   const requiresAdmin = to.matched.some(record => record.meta.requiresAdmin);
+
+  // Skip auth check for login page
+  if (to.path === '/') {
+    return next();
+  }
 
   let user = null;
   try {
     user = await account.get();
-  } catch {
+    console.log('User authenticated:', user);
+  } catch (error) {
+    console.log('Authentication error:', error.message);
     // Not logged in
   }
 
   if (requiresAuth && !user) {
+    console.log('Auth required but no user, redirecting to login');
     next('/');
   } else if (requiresAdmin && !authorizedUserEmails.includes(user?.email)) {
+    console.log('Admin required but user not authorized');
     next('/');
   } else {
+    console.log('Navigation allowed to:', to.path);
     next();
   }
 });
