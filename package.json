@@ -1,0 +1,11 @@
+{
+  "name": "pepe-clocke",
+  "version": "1.0.0",
+  "description": "Time tracking application",
+  "scripts": {
+    "deploy": "cd pepe-cls && npm run build && gh-pages -d dist"
+  },
+  "devDependencies": {
+    "gh-pages": "^6.0.0"
+  }
+}

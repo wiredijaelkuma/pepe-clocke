@@ -20,7 +20,7 @@ import { account } from './lib/appwrite';
 async function loginWithGoogle() {
   try {
     // GitHub Pages URL
-    const baseUrl = 'https://yourusername.github.io/pepe-clocke';
+    const baseUrl = 'https://wiredijaelkuma.github.io/pepe-clocke';
     
     // Use dynamic URL for development, GitHub Pages URL for production
     const isDev = process.env.NODE_ENV === 'development';
