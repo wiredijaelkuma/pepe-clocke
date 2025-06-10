@@ -1,21 +1,19 @@
 <template>
   <div class="agent-bg">
     <div class="agent-main">
-      <!-- Sidebar toggle and sidebar removed; handled by AgentLayout.vue -->
       <!-- Logo at top -->
       <div class="agent-logo-wrap">
         <img src="/static/pepe-clocked.jpg" alt="Agent Logo" class="agent-logo" />
       </div>
       <!-- Loading Spinner -->
-      <div v-if="sessionState.loading" class="agent-spinner-wrap">
+      <div v-if="loading" class="agent-spinner-wrap">
         <img src="/static/small-pepe-circle.jpg" alt="Loading..." class="agent-spinner" />
       </div>
       <!-- Ticker -->
       <div v-else class="agent-ticker" :class="tickerColor">
         <img src="/static/agent.svg" alt="Active Agents" class="ticker-icon" />
-        <span class="ticker-text">Active Agents: <b>{{ activeAgents }}</b></span>
+        <span class="ticker-text">Active Agents: <b>{{ activeAgents }}/{{ totalAgents }}</b></span>
       </div>
-      <!-- Icon above clock (removed, now at top) -->
       <!-- Realtime Clock -->
       <div class="agent-clock" id="clock">{{ time }}</div>
       <!-- Status -->
@@ -27,33 +25,47 @@
         </button>
       </div>
       <!-- Activity Buttons -->
-      <div v-if="sessionState.lastStatus !== 'Clocked out'" class="agent-buttons-grid">
-        <button v-if="step === 'clockin'" class="agent-btn agent-btn-blue" :disabled="sessionState.clockedIn || sessionState.loading" @click="clockIn().then(afterActivity)">
+      <div v-if="!clockedOutToday" class="agent-buttons-grid">
+        <!-- Clock In Button -->
+        <button v-if="!clockedInToday" class="agent-btn agent-btn-blue" @click="handleClockIn">
           <img src="/static/clock.svg" class="btn-icon" /> Clock In
         </button>
-        <!-- Main activity options as 2x2 grid -->
-        <template v-if="step === 'main'">
-          <button v-if="!lunchUsed" class="agent-btn agent-btn-orange" @click="startLunch().then(afterActivity)">
-            <img src="/static/home.svg" class="btn-icon" /> Lunch (30 min)
-          </button>
-          <button v-if="shortBreaksUsed < 2" class="agent-btn agent-btn-gold" @click="startShortBreak().then(afterActivity)">
-            <img src="/static/arrow-door.svg" class="btn-icon" /> Short Break (15 min)
-          </button>
-          <button v-if="bathroomBreaksUsed < 5" class="agent-btn agent-btn-pink" @click="startBathroomBreak().then(afterActivity)">
-            <img src="/static/donuts.svg" class="btn-icon" /> Bathroom Break (15 min)
-          </button>
-          <button class="agent-btn agent-btn-red" @click="clockOut().then(afterActivity)">
-            <img src="/static/clock.svg" class="btn-icon" /> Clock Out
-          </button>
-        </template>
-        <!-- Back from activity buttons -->
-        <button v-if="step === 'backlunch'" class="agent-btn agent-btn-orange" @click="backFromLunch().then(afterActivity)">
+        
+        <!-- Main Activity Buttons -->
+        <button v-if="clockedInToday && !onBreak && !clockedOutToday && !lunchUsed" 
+                class="agent-btn agent-btn-orange" 
+                @click="handleStartLunch">
+          <img src="/static/home.svg" class="btn-icon" /> Lunch (30 min)
+        </button>
+        
+        <button v-if="clockedInToday && !onBreak && !clockedOutToday && shortBreaksUsed < 2" 
+                class="agent-btn agent-btn-gold" 
+                @click="handleStartShortBreak">
+          <img src="/static/arrow-door.svg" class="btn-icon" /> Short Break (15 min)
+        </button>
+        
+        <button v-if="clockedInToday && !onBreak && !clockedOutToday && bathroomBreaksUsed < 5" 
+                class="agent-btn agent-btn-pink" 
+                @click="handleStartBathroomBreak">
+          <img src="/static/donuts.svg" class="btn-icon" /> Bathroom Break (15 min)
+        </button>
+        
+        <button v-if="clockedInToday && !onBreak && !clockedOutToday" 
+                class="agent-btn agent-btn-red" 
+                @click="handleClockOut">
+          <img src="/static/clock.svg" class="btn-icon" /> Clock Out
+        </button>
+        
+        <!-- Back from Break Buttons -->
+        <button v-if="onLunch" class="agent-btn agent-btn-orange" @click="handleBackFromLunch">
           <img src="/static/home.svg" class="btn-icon" /> Back from Lunch
         </button>
-        <button v-if="step === 'backshortbreak'" class="agent-btn agent-btn-gold" @click="backFromShortBreak().then(afterActivity)">
+        
+        <button v-if="onShortBreak" class="agent-btn agent-btn-gold" @click="handleBackFromShortBreak">
           <img src="/static/arrow-door.svg" class="btn-icon" /> Back from Break
         </button>
-        <button v-if="step === 'backbathroombreak'" class="agent-btn agent-btn-pink" @click="backFromBathroomBreak().then(afterActivity)">
+        
+        <button v-if="onBathroomBreak" class="agent-btn agent-btn-pink" @click="handleBackFromBathroomBreak">
           <img src="/static/donuts.svg" class="btn-icon" /> Back from Break
         </button>
       </div>
@@ -65,14 +77,14 @@
       <div class="agent-log">
         <h3>My Activity Log</h3>
         <ul>
-          <li v-for="entry in (logExpanded ? log : log.slice(0,2))" :key="entry.time">
+          <li v-for="entry in (logExpanded ? activityLog : activityLog.slice(0,2))" :key="entry.time">
             <span class="log-time">{{ entry.time }}</span>
             <span v-if="displayName"> — <span class="log-action">{{ displayName }}</span></span>
             <span v-else> — <span class="log-action">You</span></span>
             <span> — {{ entry.action }}</span>
           </li>
         </ul>
-        <div v-if="log.length > 2" class="log-expand-btn-wrap">
+        <div v-if="activityLog.length > 2" class="log-expand-btn-wrap">
           <button class="log-expand-btn" @click="logExpanded = !logExpanded">
             {{ logExpanded ? 'Show less' : 'Show more' }}
           </button>
@@ -83,9 +95,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
-import { useAgentButtons } from './useAgentButtons.js'
-import { useAgentSessionState } from './useAgentSessionState.js'
+import { ref, computed, onMounted } from 'vue'
 import { useAgentProfiles } from './useAgentProfiles'
 import { databases, Query, account } from './lib/appwrite'
 import { authorizedUserEmails } from './authorizedUsers'
@@ -95,27 +105,190 @@ const router = useRouter()
 const logExpanded = ref(false)
 const isAuthorized = ref(false)
 const activeAgents = ref(0)
+const totalAgents = ref(0)
+const loading = ref(true)
+const userId = ref('')
+const displayName = ref('')
+const time = ref('--:--:--')
+const status = ref('Not clocked in')
+
+// Activity state
+const clockedInToday = ref(false)
+const clockedOutToday = ref(false)
+const onBreak = ref(false)
+const onLunch = ref(false)
+const onShortBreak = ref(false)
+const onBathroomBreak = ref(false)
+const lunchUsed = ref(false)
+const shortBreaksUsed = ref(0)
+const bathroomBreaksUsed = ref(0)
+const activityLog = ref([])
+
+// Helper function to get today's date range
+function getTodayRange() {
+  const now = new Date()
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
+  const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString()
+  return { todayStart, todayEnd }
+}
 
 // Fetch agent profile for display name
 const { getCurrentUserProfile } = useAgentProfiles()
-const displayName = ref('')
 onMounted(async () => {
+  loading.value = true;
+  
+  // Add refresh button to UI
+  const refreshButton = document.createElement('button');
+  refreshButton.innerHTML = '🔄 Refresh';
+  refreshButton.style.position = 'fixed';
+  refreshButton.style.bottom = '20px';
+  refreshButton.style.right = '20px';
+  refreshButton.style.padding = '10px 15px';
+  refreshButton.style.backgroundColor = 'rgba(255, 126, 95, 0.7)';
+  refreshButton.style.color = 'white';
+  refreshButton.style.border = '1px solid rgba(255, 255, 255, 0.3)';
+  refreshButton.style.borderRadius = '8px';
+  refreshButton.style.cursor = 'pointer';
+  refreshButton.style.zIndex = '1000';
+  refreshButton.onclick = refreshData;
+  document.body.appendChild(refreshButton);
+  
   const profile = await getCurrentUserProfile()
   displayName.value = (profile && profile.approved) ? profile.displayName : ''
   try {
     const user = await account.get();
+    userId.value = user.$id;
     isAuthorized.value = authorizedUserEmails.includes(user.email);
-  } catch {
-    // not logged in
+    await checkUserStatus();
+    await fetchActiveAgents();
+    await updateActivityLog();
+  } catch (error) {
+    console.error('Error initializing:', error);
   }
+  loading.value = false;
 })
+
+// Check user's current status
+async function checkUserStatus() {
+  if (!userId.value) return;
+  
+  // Try to get from cache first, but use a shorter cache time (5 minutes)
+  // for user status since it's more important to be accurate
+  const cachedStatus = getFromCache('userStatus_' + userId.value, 5);
+  if (cachedStatus) {
+    // Apply cached status
+    clockedInToday.value = cachedStatus.clockedIn;
+    clockedOutToday.value = cachedStatus.clockedOut;
+    onBreak.value = cachedStatus.onBreak;
+    onLunch.value = cachedStatus.onLunch;
+    onShortBreak.value = cachedStatus.onShortBreak;
+    onBathroomBreak.value = cachedStatus.onBathroomBreak;
+    lunchUsed.value = cachedStatus.lunchUsed;
+    shortBreaksUsed.value = cachedStatus.shortBreaksUsed;
+    bathroomBreaksUsed.value = cachedStatus.bathroomBreaksUsed;
+    status.value = cachedStatus.status;
+    return;
+  }
+  
+  const { todayStart, todayEnd } = getTodayRange();
+  try {
+    const result = await databases.listDocuments(
+      '684639c3000fbbd515ea',
+      '68463a24000779b721a1',
+      [
+        Query.equal('user_Id', userId.value),
+        Query.greaterThanEqual('timestamp', todayStart),
+        Query.lessThan('timestamp', todayEnd),
+        Query.orderDesc('timestamp')
+      ]
+    );
+    
+    // Reset all status flags
+    clockedInToday.value = false;
+    clockedOutToday.value = false;
+    onBreak.value = false;
+    onLunch.value = false;
+    onShortBreak.value = false;
+    onBathroomBreak.value = false;
+    lunchUsed.value = false;
+    shortBreaksUsed.value = 0;
+    bathroomBreaksUsed.value = 0;
+    
+    // Count break usage
+    const activities = result.documents;
+    activities.forEach(doc => {
+      if (doc.Status === 'Started Short Break') shortBreaksUsed.value++;
+      if (doc.Status === 'Started Bathroom Break') bathroomBreaksUsed.value++;
+      if (doc.Status === 'Started Lunch') lunchUsed.value = true;
+    });
+    
+    // Check latest status
+    if (activities.length > 0) {
+      const latestActivity = activities[0];
+      
+      // Check for clock in/out
+      const hasClockIn = activities.some(doc => doc.Status === 'Clocked in');
+      const hasClockOut = activities.some(doc => doc.Status === 'Clocked out');
+      
+      clockedInToday.value = hasClockIn;
+      clockedOutToday.value = hasClockOut;
+      
+      // Set current status based on latest activity
+      switch (latestActivity.Status) {
+        case 'Clocked in':
+          status.value = 'Clocked in';
+          break;
+        case 'Started Lunch':
+          status.value = 'On Lunch';
+          onBreak.value = true;
+          onLunch.value = true;
+          break;
+        case 'Started Short Break':
+          status.value = 'On Short Break';
+          onBreak.value = true;
+          onShortBreak.value = true;
+          break;
+        case 'Started Bathroom Break':
+          status.value = 'On Bathroom Break';
+          onBreak.value = true;
+          onBathroomBreak.value = true;
+          break;
+        case 'Back from Lunch':
+        case 'Back from Short Break':
+        case 'Back from Bathroom Break':
+          status.value = 'Clocked in';
+          break;
+        case 'Clocked out':
+          status.value = 'Clocked out';
+          break;
+        default:
+          status.value = 'Not clocked in';
+      }
+    } else {
+      status.value = 'Not clocked in';
+    }
+    
+    // Save to cache
+    saveToCache('userStatus_' + userId.value, {
+      clockedIn: clockedInToday.value,
+      clockedOut: clockedOutToday.value,
+      onBreak: onBreak.value,
+      onLunch: onLunch.value,
+      onShortBreak: onShortBreak.value,
+      onBathroomBreak: onBathroomBreak.value,
+      lunchUsed: lunchUsed.value,
+      shortBreaksUsed: shortBreaksUsed.value,
+      bathroomBreaksUsed: bathroomBreaksUsed.value,
+      status: status.value
+    });
+  } catch (error) {
+    console.error('Error checking user status:', error);
+  }
+}
 
 function goToAdminPortal() {
   router.push('/admin');
 }
-
-// Session state listener
-const { sessionState, checkSessionState } = useAgentSessionState()
 
 const tickerColor = computed(() => {
   if (activeAgents.value < 5) return 'ticker-red'
@@ -124,19 +297,30 @@ const tickerColor = computed(() => {
 })
 
 async function fetchActiveAgents() {
-  const today = new Date().toISOString().slice(0, 10)
   try {
-    // Get all activities for today
+    // Try to get from cache first
+    const cachedData = getFromCache('activeAgents');
+    if (cachedData) {
+      activeAgents.value = cachedData.active;
+      totalAgents.value = cachedData.total;
+      return;
+    }
+    
+    const { todayStart, todayEnd } = getTodayRange()
+    
+    // Get all activities for today using timestamp range
     const result = await databases.listDocuments(
       '684639c3000fbbd515ea', // database ID (fixed)
       '68463a24000779b721a1', // collection ID
       [
-        Query.equal('date', today)
+        Query.greaterThanEqual('timestamp', todayStart),
+        Query.lessThan('timestamp', todayEnd)
       ]
     )
     
     // Track active users (clocked in but not on break)
     const activeUsers = new Set();
+    const allUsers = new Set();
     
     // Process in chronological order
     [...result.documents].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
@@ -144,7 +328,9 @@ async function fetchActiveAgents() {
         const userId = record.user_Id;
         const status = record.Status;
         
+        // Track all users who clocked in today
         if (status === 'Clocked in') {
+          allUsers.add(userId);
           activeUsers.add(userId);
         } else if (status === 'Clocked out') {
           activeUsers.delete(userId);
@@ -156,81 +342,166 @@ async function fetchActiveAgents() {
       });
     
     activeAgents.value = activeUsers.size;
+    totalAgents.value = allUsers.size; // Actual count of agents who clocked in today
+    
+    // Save to cache
+    saveToCache('activeAgents', { active: activeAgents.value, total: totalAgents.value });
   } catch (error) {
     console.log('Error fetching active agents (non-critical):', error.message);
-    activeAgents.value = 0
+    activeAgents.value = 0;
   }
-}
-
-const time = ref('--:--:--')
-
-const {
-  status,
-  step,
-  lunchUsed,
-  shortBreaksUsed,
-  bathroomBreaksUsed,
-  log,
-  clockIn,
-  startLunch,
-  backFromLunch,
-  startShortBreak,
-  backFromShortBreak,
-  startBathroomBreak,
-  backFromBathroomBreak,
-  clockOut
-} = useAgentButtons(activeAgents)
-
-// Watch for session state changes and update UI accordingly
-watch(
-  () => sessionState.value.uiStep,
-  (uiStep) => {
-    switch (uiStep) {
-      case 'main':
-        status.value = 'Clocked in'; step.value = 'main'; break
-      case 'backlunch':
-        status.value = 'On Lunch'; step.value = 'backlunch'; break
-      case 'backshortbreak':
-        status.value = 'On Short Break'; step.value = 'backshortbreak'; break
-      case 'backbathroombreak':
-        status.value = 'On Bathroom Break'; step.value = 'backbathroombreak'; break
-      case 'clockin':
-      default:
-        status.value = 'Not clocked in'; step.value = 'clockin'; break
-    }
-  },
-  { immediate: true }
-)
-
-// After any activity, refresh session state
-async function afterActivity() {
-  await checkSessionState()
 }
 
 // Function to update the activity log
 async function updateActivityLog() {
   try {
-    const user = await account.get();
-    const { getAgentLog } = useAgentButtons(activeAgents);
-    const updatedLog = await getAgentLog(user.$id);
-    if (updatedLog && updatedLog.length > 0) {
-      log.value = updatedLog;
+    if (!userId.value) return;
+    
+    // Try to get from cache first
+    const cachedLog = getFromCache('activityLog_' + userId.value);
+    if (cachedLog) {
+      activityLog.value = cachedLog;
+      return;
     }
+    
+    const { todayStart, todayEnd } = getTodayRange();
+    const result = await databases.listDocuments(
+      '684639c3000fbbd515ea',
+      '68463a24000779b721a1',
+      [
+        Query.equal('user_Id', userId.value),
+        Query.greaterThanEqual('timestamp', todayStart),
+        Query.lessThan('timestamp', todayEnd),
+        Query.orderDesc('timestamp')
+      ]
+    );
+    
+    activityLog.value = result.documents.map(doc => ({
+      action: doc.Status,
+      time: new Date(doc.timestamp).toLocaleTimeString()
+    }));
+    
+    // Save to cache
+    saveToCache('activityLog_' + userId.value, activityLog.value);
   } catch (error) {
     console.log('Failed to update activity log (non-critical):', error.message);
   }
 }
 
-// Single onMounted to avoid duplicates
+// Activity handlers
+async function logActivity(status) {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    await databases.createDocument(
+      '684639c3000fbbd515ea',
+      '68463a24000779b721a1',
+      'unique()',
+      {
+        user_Id: userId.value,
+        Status: status,
+        date: today,
+        timestamp: new Date().toISOString()
+      }
+    );
+    
+    // Clear caches to force fresh data after an action
+    localStorage.removeItem('userStatus_' + userId.value);
+    localStorage.removeItem('activityLog_' + userId.value);
+    localStorage.removeItem('activeAgents');
+    
+    // Refresh data
+    await checkUserStatus();
+    await fetchActiveAgents();
+    await updateActivityLog();
+  } catch (error) {
+    console.error('Error logging activity:', error);
+    alert('Error logging activity. Please try again.');
+  }
+}
+
+async function handleClockIn() {
+  if (clockedInToday.value) {
+    alert('You have already clocked in today.');
+    return;
+  }
+  await logActivity('Clocked in');
+}
+
+async function handleClockOut() {
+  if (confirm('Are you sure you want to clock out?')) {
+    await logActivity('Clocked out');
+  }
+}
+
+async function handleStartLunch() {
+  await logActivity('Started Lunch');
+}
+
+async function handleBackFromLunch() {
+  await logActivity('Back from Lunch');
+}
+
+async function handleStartShortBreak() {
+  await logActivity('Started Short Break');
+}
+
+async function handleBackFromShortBreak() {
+  await logActivity('Back from Short Break');
+}
+
+async function handleStartBathroomBreak() {
+  await logActivity('Started Bathroom Break');
+}
+
+async function handleBackFromBathroomBreak() {
+  await logActivity('Back from Bathroom Break');
+}
+
+// Cache data in localStorage
+function saveToCache(key, data) {
+  try {
+    localStorage.setItem(key, JSON.stringify({
+      timestamp: new Date().getTime(),
+      data
+    }));
+  } catch (e) {
+    console.log('Cache save error:', e);
+  }
+}
+
+function getFromCache(key, maxAgeMinutes = 10) {
+  try {
+    const cached = localStorage.getItem(key);
+    if (!cached) return null;
+    
+    const { timestamp, data } = JSON.parse(cached);
+    const now = new Date().getTime();
+    const maxAge = maxAgeMinutes * 60 * 1000;
+    
+    if (now - timestamp > maxAge) return null;
+    return data;
+  } catch (e) {
+    console.log('Cache read error:', e);
+    return null;
+  }
+}
+
+// Manual refresh function
+async function refreshData() {
+  await fetchActiveAgents();
+  await checkUserStatus();
+  await updateActivityLog();
+}
+
+// Update clock and refresh data periodically
 onMounted(() => {
-  fetchActiveAgents()
-  updateActivityLog()
-  setInterval(fetchActiveAgents, 300000) // Poll every 5 minutes
-  setInterval(updateActivityLog, 300000) // Poll every 5 minutes
   setInterval(() => {
     const now = new Date()
     time.value = now.toLocaleTimeString()
-  }, 1000)
+  }, 1000);
+  
+  // Only refresh automatically every 10 minutes
+  setInterval(refreshData, 600000);
 })
 </script>
 
@@ -257,6 +528,15 @@ onMounted(() => {
   max-width: 1200px;
   position: relative;
   overflow-x: visible;
+}
+.already-clocked-in {
+  background: rgba(255, 126, 95, 0.7);
+  color: white;
+  padding: 15px;
+  border-radius: 10px;
+  text-align: center;
+  margin: 10px 0;
+  font-weight: bold;
 }
 .agent-ticker {
   display: flex;
@@ -345,7 +625,7 @@ onMounted(() => {
 }
 .agent-buttons-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 18px;
   width: 100%;
   margin-bottom: 32px;

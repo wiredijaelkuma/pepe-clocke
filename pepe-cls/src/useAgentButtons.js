@@ -13,12 +13,43 @@ export function useAgentButtons(activeAgents) {
   const bathroomBreaksUsed = ref(0)
   const log = ref([])
   const userId = ref('')
+  const hasClockInToday = ref(false)
 
   // Get user ID from Appwrite on first use
   onMounted(() => {
-    getUserId().then(id => { userId.value = id })
+    getUserId().then(id => { 
+      userId.value = id;
+      checkIfAlreadyClockedIn();
+    })
     requestNotificationPermission()
   })
+
+  // EMERGENCY FIX: Check if user already clocked in today
+  async function checkIfAlreadyClockedIn() {
+    if (!userId.value) return;
+    
+    try {
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+      const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
+      
+      const result = await databases.listDocuments(
+        '684639c3000fbbd515ea',
+        '68463a24000779b721a1',
+        [
+          Query.equal('user_Id', userId.value),
+          Query.equal('Status', 'Clocked in'),
+          Query.greaterThanEqual('timestamp', todayStart),
+          Query.lessThan('timestamp', todayEnd)
+        ]
+      );
+      
+      hasClockInToday.value = result.total > 0;
+      console.log('Already clocked in today:', hasClockInToday.value);
+    } catch (error) {
+      console.error('Error checking clock-in status:', error);
+    }
+  }
 
   function addLog(action) {
     const now = new Date()
@@ -28,57 +59,7 @@ export function useAgentButtons(activeAgents) {
     })
   }
 
-  async function checkDailyClockStatus() {
-    if (!userId.value) return { alreadyClockedIn: false, alreadyClockedOut: false };
-    
-    const today = new Date().toISOString().slice(0, 10);
-    try {
-      const result = await databases.listDocuments(
-        '684639c3000fbbd515ea',
-        '68463a24000779b721a1',
-        [
-          Query.equal('user_Id', userId.value),
-          Query.equal('date', today)
-        ]
-      );
-      
-      const clockedInToday = result.documents.some(doc => doc.Status === 'Clocked in');
-      const clockedOutToday = result.documents.some(doc => doc.Status === 'Clocked out');
-      
-      return { 
-        alreadyClockedIn: clockedInToday,
-        alreadyClockedOut: clockedOutToday
-      };
-    } catch (error) {
-      console.error('Error checking clock status:', error);
-      return { alreadyClockedIn: false, alreadyClockedOut: false };
-    }
-  }
-
   async function clockIn() {
-    // Check if already clocked in today
-    const today = new Date().toISOString().slice(0, 10);
-    try {
-      if (userId.value) {
-        const result = await databases.listDocuments(
-          '684639c3000fbbd515ea',
-          '68463a24000779b721a1',
-          [
-            Query.equal('user_Id', userId.value),
-            Query.equal('date', today),
-            Query.equal('Status', 'Clocked in')
-          ]
-        );
-        
-        if (result.documents.length > 0) {
-          window.alert('You have already clocked in today. Please contact an admin if this is an error.');
-          return;
-        }
-      }
-    } catch (error) {
-      console.error('Error checking clock status:', error);
-    }
-    
     status.value = 'Clocked in'
     step.value = 'main'
     addLog('Clocked in')
@@ -178,29 +159,6 @@ export function useAgentButtons(activeAgents) {
   }
 
   async function clockOut() {
-    // Check if already clocked out today
-    const today = new Date().toISOString().slice(0, 10);
-    try {
-      if (userId.value) {
-        const result = await databases.listDocuments(
-          '684639c3000fbbd515ea',
-          '68463a24000779b721a1',
-          [
-            Query.equal('user_Id', userId.value),
-            Query.equal('date', today),
-            Query.equal('Status', 'Clocked out')
-          ]
-        );
-        
-        if (result.documents.length > 0) {
-          window.alert('You have already clocked out today. Please contact an admin if this is an error.');
-          return;
-        }
-      }
-    } catch (error) {
-      console.error('Error checking clock status:', error);
-    }
-    
     if (confirm('Are you sure you want to clock out?')) {
       status.value = 'Clocked out'
       step.value = ''
@@ -215,14 +173,18 @@ export function useAgentButtons(activeAgents) {
   async function getAgentLog(userId) {
     if (!userId) return [];
     
-    const today = new Date().toISOString().slice(0, 10);
     try {
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+      const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
+      
       const result = await databases.listDocuments(
         '684639c3000fbbd515ea',
         '68463a24000779b721a1',
         [
           Query.equal('user_Id', userId),
-          Query.equal('date', today),
+          Query.greaterThanEqual('timestamp', todayStart),
+          Query.lessThan('timestamp', todayEnd),
           Query.orderDesc('timestamp')
         ]
       );

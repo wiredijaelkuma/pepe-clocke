@@ -26,15 +26,15 @@
           </div>
           <!-- Active Agents List -->
           <div class="active-agents-list">
-            <h3>Active Agents</h3>
-            <div v-if="activeAgentsList.length === 0" class="no-agents">
-              No agents currently active
+            <h3>Today's Agents</h3>
+            <div v-if="allAgentsList.length === 0" class="no-agents">
+              No agents active today
             </div>
             <ul v-else class="agents-list">
-              <li v-for="agent in activeAgentsList" :key="agent.userId" class="agent-item">
+              <li v-for="agent in allAgentsList" :key="agent.userId" class="agent-item">
                 <span class="agent-name">{{ getDisplayName(agent.userId) }}</span>
                 <span class="agent-status">{{ agent.status }}</span>
-                <span class="agent-time">Since {{ new Date(agent.since).toLocaleTimeString() }}</span>
+                <span class="agent-time">{{ formatTime(agent.since) }}</span>
               </li>
             </ul>
           </div>
@@ -55,7 +55,7 @@
                   <li v-for="violation in breakViolationsList" :key="violation.$id" class="concern-item">
                     <span class="concern-user">{{ getDisplayName(violation.user_Id) }}</span>
                     <span class="concern-detail">{{ violation.breakType }} over by {{ violation.overBy }} minutes</span>
-                    <span class="concern-time">{{ new Date(violation.timestamp).toLocaleTimeString() }}</span>
+                    <span class="concern-time">{{ formatTime(violation.timestamp) }}</span>
                   </li>
                 </ul>
               </div>
@@ -69,7 +69,7 @@
                 <ul v-else class="concerns-list">
                   <li v-for="late in lateClockIns" :key="late.$id" class="concern-item">
                     <span class="concern-user">{{ getDisplayName(late.user_Id) }}</span>
-                    <span class="concern-detail">Clocked in at {{ new Date(late.timestamp).toLocaleTimeString() }}</span>
+                    <span class="concern-detail">Clocked in at {{ formatTime(late.timestamp) }}</span>
                   </li>
                 </ul>
               </div>
@@ -82,18 +82,26 @@
               <h3>Today's Activity Log</h3>
               <span class="toggle-icon">{{ activityLogExpanded ? '▼' : '►' }}</span>
             </div>
-            <div v-if="activityLogExpanded">
-              <div v-if="todayActivities.length === 0" class="no-activities">
-                No activities recorded today
+            <div v-if="activityLogExpanded" class="activity-log-container">
+              <div class="search-container">
+                <input 
+                  type="text" 
+                  v-model="searchQuery" 
+                  placeholder="Search activities..." 
+                  class="search-input"
+                />
+              </div>
+              <div v-if="searchedActivities.length === 0" class="no-activities">
+                No activities found
               </div>
               <ul v-else class="activity-list">
-                <li v-for="activity in todayActivities.slice(0, activityLogExpanded ? 20 : 10)" :key="activity.$id" class="activity-item">
-                  <span class="activity-time">{{ new Date(activity.timestamp).toLocaleTimeString() }}</span>
+                <li v-for="activity in searchedActivities" :key="activity.$id" class="activity-item">
+                  <span class="activity-time">{{ formatTime(activity.timestamp) }}</span>
                   <span class="activity-user">{{ getDisplayName(activity.user_Id) }}</span>
                   <span class="activity-status">{{ activity.Status }}</span>
                 </li>
               </ul>
-              <div v-if="todayActivities.length > 20" class="show-more">
+              <div v-if="todayActivities.length > activityDisplayCount && searchedActivities.length === activityDisplayCount" class="show-more">
                 <button @click="loadMoreActivities">Show more</button>
               </div>
             </div>
@@ -182,6 +190,25 @@
 .toggle-icon {
   color: #ffc107;
   font-size: 1.2rem;
+}
+
+.activity-log-container {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.search-container {
+  margin-bottom: 16px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.9);
+  color: #333;
+  font-size: 1rem;
 }
 
 .activity-list {
@@ -293,13 +320,14 @@
 </style>
 
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { databases, Query } from './lib/appwrite';
 import AdminSidebar from './AdminSidebar.vue';
 
 const clockedInAgents = ref(0);
 const activeAgents = ref(0);
 const activeAgentsList = ref([]);
+const allAgentsList = ref([]);
 const breakViolations = ref(0);
 const breakViolationsList = ref([]);
 const lateClockIns = ref([]);
@@ -307,36 +335,46 @@ const clockedInAgentList = ref([]);
 const todayActivities = ref([]);
 const userProfiles = ref({});
 const activityLogExpanded = ref(false);
-const activityDisplayCount = ref(10);
+const activityDisplayCount = ref(20);
+const searchQuery = ref('');
 let pollingInterval = null;
+
+// Helper function to get today's date range
+function getTodayRange() {
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+  
+  // Create date objects at midnight for today and tomorrow
+  const todayStart = new Date(today + 'T00:00:00');
+  const todayEnd = new Date(today + 'T23:59:59');
+  
+  const startISO = todayStart.toISOString();
+  const endISO = todayEnd.toISOString();
+  
+  console.log('Today range:', startISO, 'to', endISO);
+  return { todayStart: startISO, todayEnd: endISO };
+}
+
+// Format time for display
+function formatTime(timestamp) {
+  return new Date(timestamp).toLocaleTimeString();
+}
 
 const fetchData = async () => {
   try {
-    const today = new Date().toISOString().slice(0, 10);
+    const { todayStart, todayEnd } = getTodayRange();
     
-    // Fetch all activities for today - first try with date field
-    let response;
-    try {
-      response = await databases.listDocuments(
-        '684639c3000fbbd515ea', // database ID
-        '68463a24000779b721a1', // collection ID
-        [
-          Query.equal('date', today),
-          Query.orderDesc('timestamp')
-        ]
-      );
-    } catch (dateError) {
-      // If date field fails, try with timestamp range
-      response = await databases.listDocuments(
-        '684639c3000fbbd515ea', // database ID
-        '68463a24000779b721a1', // collection ID
-        [
-          Query.greaterThanEqual('timestamp', today + 'T00:00:00.000Z'),
-          Query.lessThan('timestamp', today + 'T23:59:59.999Z'),
-          Query.orderDesc('timestamp')
-        ]
-      );
-    }
+    // Fetch all activities for today using timestamp range
+    const response = await databases.listDocuments(
+      '684639c3000fbbd515ea', // database ID
+      '68463a24000779b721a1', // collection ID
+      [
+        Query.greaterThanEqual('timestamp', todayStart),
+        Query.lessThan('timestamp', todayEnd),
+        Query.orderDesc('timestamp'),
+        Query.limit(1000)
+      ]
+    );
 
     const allToday = response.documents;
     todayActivities.value = allToday;
@@ -353,11 +391,17 @@ const fetchData = async () => {
       }
     });
     
-    // Get currently active agents (clocked in but not on break or lunch)
+    // Get all agents who interacted today
     const activeUsers = new Set();
     const activeAgentsData = [];
+    const allAgentsData = [];
     const userStatus = {};
     const userTimestamp = {};
+    
+    // Track all users who interacted today and their latest status
+    const allUsers = new Set();
+    const latestStatus = {};
+    const latestTimestamp = {};
     
     // Process in chronological order to track current status
     [...allToday].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
@@ -366,6 +410,14 @@ const fetchData = async () => {
         const status = record.Status;
         const timestamp = record.timestamp;
         
+        // Add to all users who interacted today
+        allUsers.add(userId);
+        
+        // Track latest status for all users
+        latestStatus[userId] = status;
+        latestTimestamp[userId] = timestamp;
+        
+        // Track active users (for the counter)
         if (status === 'Clocked in') {
           activeUsers.add(userId);
           userStatus[userId] = 'Working';
@@ -394,67 +446,64 @@ const fetchData = async () => {
       });
     }
     
+    // Build all agents list with details
+    for (const userId of allUsers) {
+      let displayStatus = latestStatus[userId];
+      
+      // Format status for display
+      if (displayStatus === 'Clocked in') {
+        displayStatus = 'Working';
+      } else if (displayStatus.includes('Started ')) {
+        displayStatus = displayStatus.replace('Started ', 'On ');
+      }
+      
+      allAgentsData.push({
+        userId,
+        status: displayStatus,
+        since: latestTimestamp[userId]
+      });
+    }
+    
     activeAgents.value = activeUsers.size;
     activeAgentsList.value = activeAgentsData;
+    allAgentsList.value = allAgentsData;
     
-    // Get break violations from admin notifications - try without date filters first
-    let violationsResponse;
-    try {
-      violationsResponse = await databases.listDocuments(
-        '684639c3000fbbd515ea',
-        '684654f10018b0311641'
-      );
-    } catch (error) {
-      console.error('Error fetching violations:', error);
-      violationsResponse = { documents: [], total: 0 };
-    }
+    // Get break violations from admin notifications - use timestamp range
+    const violationsResponse = await databases.listDocuments(
+      '684639c3000fbbd515ea',
+      '684654f10018b0311641',
+      [
+        Query.greaterThanEqual('timestamp', todayStart),
+        Query.lessThan('timestamp', todayEnd),
+        Query.orderDesc('timestamp')
+      ]
+    );
     
     breakViolations.value = violationsResponse.total;
     breakViolationsList.value = violationsResponse.documents;
     
     // Find late clock-ins (after 8:10 AM)
-    const lateTime = new Date(today);
+    const lateTime = new Date(todayStart);
     lateTime.setHours(8, 10, 0); // 8:10 AM
     
     const lateClockInsData = allToday.filter(activity => {
       if (activity.Status === 'Clocked in') {
         const activityTime = new Date(activity.timestamp);
-        // Check if it's the same day and after 8:10 AM
-        return activityTime > lateTime && 
-               activityTime.toISOString().slice(0, 10) === today;
+        return activityTime > lateTime;
       }
       return false;
     });
-    
-    // Process user break status
-    const userBreakStatus = {};
-    
-    // Process in chronological order (oldest to newest)
-    [...allToday].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
-      .forEach(record => {
-        const userId = record.user_Id;
-        const status = record.Status;
-        
-        if (status.includes('Started') && (status.includes('Break') || status.includes('Lunch'))) {
-          userBreakStatus[userId] = true;
-        } else if (status.includes('Back from') && (status.includes('Break') || status.includes('Lunch'))) {
-          userBreakStatus[userId] = false;
-        }
-      });
     
     // Get unique user IDs for each category
     const uniqueUsers = [...new Set(allToday.map(d => d.user_Id))];
     
     clockedInAgents.value = uniqueUsers.length;
-    // activeAgents.value is set above
     
     // Store late clock-ins
     lateClockIns.value = lateClockInsData;
     
     // Process the agent list with more information
     clockedInAgentList.value = allToday;
-    
-    // No chart to refresh
 
   } catch (error) {
     console.error('Failed to fetch admin data:', error);
@@ -473,7 +522,23 @@ function loadMoreActivities() {
   activityDisplayCount.value += 20;
 }
 
-// Chart functionality removed
+// Filtered activities based on search query
+const searchedActivities = computed(() => {
+  if (!searchQuery.value) {
+    return todayActivities.value.slice(0, activityDisplayCount.value);
+  }
+  
+  const query = searchQuery.value.toLowerCase();
+  return todayActivities.value.filter(activity => {
+    const userName = getDisplayName(activity.user_Id).toLowerCase();
+    const status = activity.Status.toLowerCase();
+    const time = formatTime(activity.timestamp).toLowerCase();
+    
+    return userName.includes(query) || 
+           status.includes(query) || 
+           time.includes(query);
+  }).slice(0, activityDisplayCount.value);
+});
 
 const stopPolling = () => {
   if (pollingInterval) {
