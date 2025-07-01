@@ -27,7 +27,7 @@ export function useAgentProfiles() {
     return result.documents[0] || null
   }
 
-  async function setDisplayName(userId, displayName, approved) {
+  async function setDisplayName(userId, displayName, approved, weeklySalary = 5000) {
     // Find existing profile
     const result = await databases.listDocuments(DB_ID, COLLECTION_ID, [
       Query.equal('user_Id', userId)
@@ -36,14 +36,16 @@ export function useAgentProfiles() {
       // Update
       return databases.updateDocument(DB_ID, COLLECTION_ID, result.documents[0].$id, {
         displayName,
-        approved
+        approved,
+        weeklySalary
       })
     } else {
       // Create
       return databases.createDocument(DB_ID, COLLECTION_ID, 'unique()', {
         user_Id: userId,
         displayName,
-        approved
+        approved,
+        weeklySalary
       })
     }
   }

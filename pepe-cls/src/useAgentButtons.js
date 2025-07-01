@@ -1,5 +1,5 @@
 import { ref, onMounted } from 'vue'
-import { getUserId, logActivityToAppwrite } from './appwriteAgentSession'
+import { getUserId, logActivityToAppwrite, fetchLatestActivity } from './appwriteAgentSession'
 import { checkUserBreakOverages } from './breakOverageChecker'
 import { requestNotificationPermission, sendLocalNotification } from './pushNotifications'
 import { logAdminNotification } from './pushNotificationsAdmin'
@@ -13,43 +13,12 @@ export function useAgentButtons(activeAgents) {
   const bathroomBreaksUsed = ref(0)
   const log = ref([])
   const userId = ref('')
-  const hasClockInToday = ref(false)
 
   // Get user ID from Appwrite on first use
   onMounted(() => {
-    getUserId().then(id => { 
-      userId.value = id;
-      checkIfAlreadyClockedIn();
-    })
+    getUserId().then(id => { userId.value = id })
     requestNotificationPermission()
   })
-
-  // EMERGENCY FIX: Check if user already clocked in today
-  async function checkIfAlreadyClockedIn() {
-    if (!userId.value) return;
-    
-    try {
-      const now = new Date();
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-      const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
-      
-      const result = await databases.listDocuments(
-        '684639c3000fbbd515ea',
-        '68463a24000779b721a1',
-        [
-          Query.equal('user_Id', userId.value),
-          Query.equal('Status', 'Clocked in'),
-          Query.greaterThanEqual('timestamp', todayStart),
-          Query.lessThan('timestamp', todayEnd)
-        ]
-      );
-      
-      hasClockInToday.value = result.total > 0;
-      console.log('Already clocked in today:', hasClockInToday.value);
-    } catch (error) {
-      console.error('Error checking clock-in status:', error);
-    }
-  }
 
   function addLog(action) {
     const now = new Date()
@@ -59,10 +28,27 @@ export function useAgentButtons(activeAgents) {
     })
   }
 
+  // Check for late clock-in (after 8:10 AM)
+  function checkLateClockIn() {
+    const now = new Date()
+    const today = now.toISOString().slice(0, 10)
+    const lateTime = new Date(today + 'T08:10:00')
+    
+    if (now > lateTime) {
+      // Log late clock-in notification
+      logAdminNotification(userId.value, 'Late Clock-in', Math.round((now - lateTime) / 60000))
+      sendLocalNotification('Late Clock-in', `You clocked in ${Math.round((now - lateTime) / 60000)} minutes late.`)
+    }
+  }
+
   async function clockIn() {
     status.value = 'Clocked in'
     step.value = 'main'
     addLog('Clocked in')
+    
+    // Check for late clock-in
+    checkLateClockIn()
+    
     if (userId.value) {
       await logActivityToAppwrite(userId.value, 'Clocked in')
     }
@@ -173,18 +159,14 @@ export function useAgentButtons(activeAgents) {
   async function getAgentLog(userId) {
     if (!userId) return [];
     
+    const today = new Date().toISOString().slice(0, 10);
     try {
-      const now = new Date();
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-      const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
-      
       const result = await databases.listDocuments(
         '684639c3000fbbd515ea',
         '68463a24000779b721a1',
         [
           Query.equal('user_Id', userId),
-          Query.greaterThanEqual('timestamp', todayStart),
-          Query.lessThan('timestamp', todayEnd),
+          Query.equal('date', today),
           Query.orderDesc('timestamp')
         ]
       );

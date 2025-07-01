@@ -13,10 +13,7 @@ const routes = [
     component: AdminInterface,
     meta: { requiresAuth: true, requiresAdmin: true },
     children: [
-      {
-        path: '',
-        component: () => import('./components/admin/Overview.vue'),
-      },
+
       {
         path: 'requests',
         component: () => import('./components/admin/AdminRequests.vue'),
@@ -28,6 +25,14 @@ const routes = [
       {
         path: 'time-log',
         component: () => import('./components/admin/TimeLog.vue'),
+      },
+      {
+        path: 'payroll',
+        component: () => import('./components/admin/Payroll.vue'),
+      },
+      {
+        path: 'profiles',
+        component: () => import('./AdminProfiles.vue'),
       },
     ],
   },

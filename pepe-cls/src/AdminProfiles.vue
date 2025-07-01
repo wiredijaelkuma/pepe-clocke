@@ -8,6 +8,7 @@
           <tr>
             <th>User ID</th>
             <th>Display Name</th>
+            <th>Weekly Salary (MXN)</th>
             <th>Approved</th>
             <th>Actions</th>
           </tr>
@@ -17,6 +18,9 @@
             <td>{{ profile.user_Id }}</td>
             <td>
               <input v-model="profile.displayName" class="admin-profiles-input" />
+            </td>
+            <td>
+              <input v-model.number="profile.weeklySalary" type="number" class="admin-profiles-input" placeholder="5000" />
             </td>
             <td>
               <input type="checkbox" v-model="profile.approved" />
@@ -33,10 +37,19 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useAgentProfiles } from './useAgentProfiles'
 
 const { profiles, loading, fetchProfiles, setDisplayName } = useAgentProfiles()
+
+// Ensure weeklySalary is set for existing profiles
+watch(profiles, (newProfiles) => {
+  newProfiles.forEach(profile => {
+    if (!profile.weeklySalary) {
+      profile.weeklySalary = 5000
+    }
+  })
+}, { immediate: true })
 const saveMsg = ref('')
 
 onMounted(() => {
@@ -44,11 +57,20 @@ onMounted(() => {
 })
 
 async function saveProfile(profile) {
-  await setDisplayName(profile.user_Id, profile.displayName, profile.approved)
+  await setDisplayName(profile.user_Id, profile.displayName, profile.approved, profile.weeklySalary || 5000)
   saveMsg.value = 'Profile saved!'
   setTimeout(() => { saveMsg.value = '' }, 2000)
   fetchProfiles()
 }
+
+// Ensure weeklySalary is set for existing profiles
+watch(profiles, (newProfiles) => {
+  newProfiles.forEach(profile => {
+    if (!profile.weeklySalary) {
+      profile.weeklySalary = 5000
+    }
+  })
+}, { immediate: true })
 </script>
 
 <style scoped>

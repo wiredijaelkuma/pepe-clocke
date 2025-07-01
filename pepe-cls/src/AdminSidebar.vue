@@ -8,6 +8,8 @@
       <li><router-link to="/admin/requests">Requests</router-link></li>
       <li><router-link to="/admin/agent-management">Agent Management</router-link></li>
       <li><router-link to="/admin/time-log">Time Log</router-link></li>
+      <li><router-link to="/admin/payroll">Payroll</router-link></li>
+      <li><router-link to="/admin/profiles">Agent Profiles</router-link></li>
       <li class="home-link"><router-link to="/agent">Return to Agent</router-link></li>
     </ul>
   </div>
